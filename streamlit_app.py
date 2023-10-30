@@ -96,6 +96,6 @@ if st.session_state.messages[-1]["role"] != "assistant":
             #placeholder.markdown(copyright_msg)
             
 
-    message = {"role": "assistant", "content": full_response}
+    message = {"role": "assistant", "content": print_out}
     
     st.session_state.messages.append(message)
