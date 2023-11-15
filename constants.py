@@ -14,7 +14,7 @@ Request: ```{}```
 Format your output as the following JSON object:
 {{
     "explanation": "Explanation for why this request might be requesting copyrighted material",
-     "confidenceLevel": 0 if request doesn't request copyrighted material, 1 if it is somewhat likely to request copyrighted or public domain material, 2 only if there is a blatant request for exact replication of material from a certain known copyrighted source
+     "plagiarismLevel": 0 if request doesn't request copyrighted material, 1 if it is somewhat likely to request copyrighted or public domain material, 2 only if there is a blatant request for exact replication of material from a certain known copyrighted source
 }}
 Output only a JSON object and nothing else."""
 
