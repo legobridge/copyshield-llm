@@ -7,7 +7,7 @@ from constants import ASSISTANT_ROLE_NAME, USER_ROLE_NAME, SAFETY_SETTINGS, INPU
 # App title
 st.set_page_config(page_title="🌴💬 PaLM 2 Chatbot")
 
-# Replicate Credentials
+# Sidebar
 with st.sidebar:
     st.title('LGAI490 - Copyright Infringement in Generative Text Outputs')
     st.write('This chatbot is created using the PaLM 2 LLM model from Google.')
@@ -50,11 +50,11 @@ def get_input_plagiarism_level():
     print(output.filters)
     output_text = output.candidates[0]["output"]
     print(output_text)
-    if '"confidenceLevel": 0' in output_text:
+    if '"plagiarismLevel": 0' in output_text:
         return 0
-    if '"confidenceLevel": 1' in output_text:
+    if '"plagiarismLevel": 1' in output_text:
         return 1
-    if '"confidenceLevel": 2' in output_text:
+    if '"plagiarismLevel": 2' in output_text:
         return 2
     return 0
 
@@ -88,7 +88,7 @@ if st.session_state.messages[-1]["role"] != ASSISTANT_ROLE_NAME:
                 response = generate_palm_chat_response()
                 if response is None:
                     response = "Sorry, the prompt was blocked. Try asking differently"
-                copyright_msg = "\n\nYour request may have requested copyrighted material" if request_plagiarism_level == 1 else ""
+                copyright_msg = "\n\nYou may have requested copyrighted material" if request_plagiarism_level == 1 else ""
                 response += copyright_msg
             else:
                 response = "You have requested copyrighted material, please try again"
