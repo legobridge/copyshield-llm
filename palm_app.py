@@ -7,7 +7,7 @@ from constants import ASSISTANT_ROLE_NAME, USER_ROLE_NAME, SAFETY_SETTINGS, INPU
 # App title
 st.set_page_config(page_title="🌴💬 PaLM 2 Chatbot")
 
-# Replicate Credentials
+# Sidebar
 with st.sidebar:
     st.title('LGAI490 - Copyright Infringement in Generative Text Outputs')
     st.write('This chatbot is created using the PaLM 2 LLM model from Google.')
