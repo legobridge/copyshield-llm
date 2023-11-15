@@ -8,7 +8,7 @@ from constants import ASSISTANT_ROLE_NAME, USER_ROLE_NAME, INPUT_PROMPT_TEMPLATE
 
 
 # App title
-st.set_page_config(page_title="💬 GPT-4 Chatbot")
+st.set_page_config(page_title="💬 GPT Chatbot")
 api_key = os.environ["OPENAI_API_KEY"]
 client = OpenAI()
 
@@ -70,11 +70,18 @@ def generate_gpt_chat_response():
     return output.choices[0].message.content
 
 
+# Function for performing a BM25 search of the GPT response over our corpus
+def filter_response_for_text_similarity(response_to_check: str) -> str:
+    # TODO
+    return response_to_check
+
+
 # User-provided prompt
 if prompt := st.chat_input():
     st.session_state.messages.append({"role": USER_ROLE_NAME, "content": prompt})
     with st.chat_message(USER_ROLE_NAME):
         st.write(prompt)
+
 
 # Generate a new response if last message is not from assistant
 if st.session_state.messages[-1]["role"] != ASSISTANT_ROLE_NAME:
@@ -88,6 +95,8 @@ if st.session_state.messages[-1]["role"] != ASSISTANT_ROLE_NAME:
                 response = generate_gpt_chat_response()
                 if response is None:
                     response = "Sorry, the prompt was blocked by provider. Try asking differently."
+                else:
+                    response = filter_response_for_text_similarity(response)
                 copyright_msg = ""
                 if request_plagiarism_level == 1:
                     copyright_msg = "\n\nYou may have requested copyrighted material. " \
