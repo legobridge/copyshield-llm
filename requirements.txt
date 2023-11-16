@@ -3,3 +3,4 @@ replicate~=0.15.5
 google-generativeai
 openai~=1.2.4
 rank-bm25
+pandas

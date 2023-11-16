@@ -1,27 +1,57 @@
-import os
+import pickle
+from dataclasses import dataclass
 from typing import Optional
+from pathlib import Path
 
+import pandas as pd
 from rank_bm25 import BM25Okapi
 
-
-TEXT_DIR = "gutenberg/data/text"
-CORPUS_SIZE = 100
+DATA_DIR = Path("data/")
+TEXT_DIR = DATA_DIR / "text"
+METADATA_PATH = DATA_DIR / "metadata.csv"
+CORPUS_PICKLE_PATH = DATA_DIR / "corpus_pickle.pkl"
+BM25_PICKLE_PATH = DATA_DIR / "bm25_pickle.pkl"
+CORPUS_SIZE = 500
 SCORE_DIFF_THRESHOLD = 0.02
+
+
+@dataclass
+class Document:
+    title: str
+    author: str
+    text: str
 
 
 class BM25Scorer:
 
     def __init__(self):
-        self.corpus = []  # todo: add metadata
-        for txt in os.listdir(TEXT_DIR)[:CORPUS_SIZE]:
-            if txt.endswith(".txt"):
-                with open(os.path.join(TEXT_DIR, txt)) as f:
-                    doc = f.read().lower()
-                    self.corpus.append(doc)
-        tokenized_corpus = [doc.split(" ") for doc in self.corpus]
-        self.bm25 = BM25Okapi(tokenized_corpus)
+        if CORPUS_PICKLE_PATH.exists():
+            with open(CORPUS_PICKLE_PATH, 'rb') as f:
+                self.corpus = pickle.load(f)
+            with open(BM25_PICKLE_PATH, 'rb') as f:
+                self.bm25 = pickle.load(f)
+        else:
+            metadata_df = pd.read_csv(METADATA_PATH)
+            self.corpus = []
+            for _, row in metadata_df.iterrows():
+                doc_id = row['id']
+                doc_path = TEXT_DIR / f"{doc_id}_text.txt"
+                if doc_path.exists():  # todo: parallelize
+                    with open(doc_path) as f:
+                        text = f.read()
+                    title = row['title']
+                    author = row['author']
+                    self.corpus.append(Document(title, author, text))
+                    if len(self.corpus) == CORPUS_SIZE:
+                        break
+            tokenized_corpus = [doc.text.split(" ") for doc in self.corpus]
+            self.bm25 = BM25Okapi(tokenized_corpus)
+            with open(CORPUS_PICKLE_PATH, 'wb') as f:
+                pickle.dump(self.corpus, f)
+            with open(BM25_PICKLE_PATH, 'wb') as f:
+                pickle.dump(self.bm25, f)
 
-    def find_suspected_source_of_response(self, text_to_check: str) -> Optional[str]:
+    def find_suspected_source_of_response(self, text_to_check: str) -> Optional[Document]:
         """
         Function for performing a BM25 search of the LLM response over our corpus.
         :param text_to_check: the text to check for infringement
