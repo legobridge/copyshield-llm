@@ -4,6 +4,7 @@ import os
 import streamlit as st
 from openai import OpenAI
 
+from bm25 import BM25Scorer
 from constants import ASSISTANT_ROLE_NAME, USER_ROLE_NAME, INPUT_PROMPT_TEMPLATE
 
 
@@ -11,14 +12,16 @@ from constants import ASSISTANT_ROLE_NAME, USER_ROLE_NAME, INPUT_PROMPT_TEMPLATE
 st.set_page_config(page_title="💬 GPT Chatbot")
 api_key = os.environ["OPENAI_API_KEY"]
 client = OpenAI()
+bm25_scorer = BM25Scorer()
 
 # Sidebar
 with st.sidebar:
     st.title('LGAI490 - Copyright Infringement in Generative Text Outputs')
-    st.write('This chatbot is created using the GPT-4 Turbo LLM model from OpenAI.')
+    st.write('This chatbot is using the GPT LLM model from OpenAI.')
     st.success('Proceed to entering your prompt message!', icon='👉')
 
     st.subheader('Models and parameters')
+    model = st.sidebar.radio('model', options=["gpt-3.5-turbo-1106", "gpt-4-1106-preview"])
     temperature = st.sidebar.slider('temperature', min_value=0.00, max_value=5.0, value=0.1, step=0.01)
     top_p = st.sidebar.slider('top_p', min_value=0.01, max_value=1.0, value=0.9, step=0.01)
 
@@ -44,7 +47,7 @@ def get_input_plagiarism_report():
     try:
         input_prompt = INPUT_PROMPT_TEMPLATE.format(st.session_state.messages[-1]["content"])
         output = client.chat.completions.create(
-            model="gpt-3.5-turbo-1106",
+            model=model,
             response_format={"type": "json_object"},
             messages=[{"role": "user",
                        "content": input_prompt}],
@@ -61,7 +64,7 @@ def get_input_plagiarism_report():
 # Function for generating GPT response.
 def generate_gpt_chat_response():
     output = client.chat.completions.create(
-        model="gpt-3.5-turbo-1106",
+        model=model,
         messages=st.session_state.messages,
         temperature=temperature, top_p=top_p)
     print(output)
@@ -70,18 +73,11 @@ def generate_gpt_chat_response():
     return output.choices[0].message.content
 
 
-# Function for performing a BM25 search of the GPT response over our corpus
-def filter_response_for_text_similarity(response_to_check: str) -> str:
-    # TODO
-    return response_to_check
-
-
 # User-provided prompt
 if prompt := st.chat_input():
     st.session_state.messages.append({"role": USER_ROLE_NAME, "content": prompt})
     with st.chat_message(USER_ROLE_NAME):
         st.write(prompt)
-
 
 # Generate a new response if last message is not from assistant
 if st.session_state.messages[-1]["role"] != ASSISTANT_ROLE_NAME:
@@ -91,20 +87,30 @@ if st.session_state.messages[-1]["role"] != ASSISTANT_ROLE_NAME:
             request_plagiarism_report = get_input_plagiarism_report()
             request_plagiarism_level = request_plagiarism_report["plagiarismLevel"]
             request_plagiarism_explanation = request_plagiarism_report["explanation"]
-            if request_plagiarism_level < 2:
+
+            response = ""
+            copyright_msg = ""
+
+            if request_plagiarism_level == 2:
+                # If the request is blatantly asking for copyrighted material, don't bother generating a chat response
+                copyright_msg += "You have requested copyrighted material, please try again. " \
+                                 + request_plagiarism_explanation
+            else:
+                # Else, generate a response and evaluate it
                 response = generate_gpt_chat_response()
                 if response is None:
-                    response = "Sorry, the prompt was blocked by provider. Try asking differently."
+                    copyright_msg = "Sorry, the prompt was blocked by provider. Try asking differently."
                 else:
-                    response = filter_response_for_text_similarity(response)
-                copyright_msg = ""
-                if request_plagiarism_level == 1:
-                    copyright_msg = "\n\nYou may have requested copyrighted material. " \
-                                    + request_plagiarism_explanation
-                response += copyright_msg
-            else:
-                response = "You have requested copyrighted material, please try again. " \
-                           + request_plagiarism_explanation
+                    if request_plagiarism_level == 1:
+                        copyright_msg += "You may have requested copyrighted material. " \
+                                         + request_plagiarism_explanation
+
+                    suspected_source = bm25_scorer.find_suspected_source_of_response(response)
+                    if suspected_source is not None:
+                        copyright_msg += f"\n\nThe generated text bears noticeable similarity to {suspected_source}."
+            if copyright_msg != "":
+                response += "\n\n*" + copyright_msg + "*"
+
             placeholder = st.empty()
             full_response = ''
             for item in response:
