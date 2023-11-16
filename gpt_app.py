@@ -9,10 +9,10 @@ from constants import ASSISTANT_ROLE_NAME, USER_ROLE_NAME, INPUT_PROMPT_TEMPLATE
 
 
 # App title
-st.set_page_config(page_title="💬 GPT Chatbot")
+st.set_page_config(page_title="💬 No-Plagiarism GPT Chatbot")
 api_key = os.environ["OPENAI_API_KEY"]
-client = OpenAI()
-bm25_scorer = BM25Scorer()
+st.session_state['open_ai_client'] = OpenAI()
+st.session_state['bm25_scorer'] = BM25Scorer()
 
 # Sidebar
 with st.sidebar:
@@ -46,7 +46,7 @@ st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
 def get_input_plagiarism_report():
     try:
         input_prompt = INPUT_PROMPT_TEMPLATE.format(st.session_state.messages[-1]["content"])
-        output = client.chat.completions.create(
+        output = st.session_state['open_ai_client'].chat.completions.create(
             model=model,
             response_format={"type": "json_object"},
             messages=[{"role": "user",
@@ -63,7 +63,7 @@ def get_input_plagiarism_report():
 
 # Function for generating GPT response.
 def generate_gpt_chat_response():
-    output = client.chat.completions.create(
+    output = st.session_state['open_ai_client'].chat.completions.create(
         model=model,
         messages=st.session_state.messages,
         temperature=temperature, top_p=top_p)
@@ -105,9 +105,10 @@ if st.session_state.messages[-1]["role"] != ASSISTANT_ROLE_NAME:
                         copyright_msg += "You may have requested copyrighted material. " \
                                          + request_plagiarism_explanation
 
-                    suspected_source = bm25_scorer.find_suspected_source_of_response(response)
+                    suspected_source = st.session_state['bm25_scorer'].find_suspected_source_of_response(response)
                     if suspected_source is not None:
-                        copyright_msg += f"\n\nThe generated text bears noticeable similarity to {suspected_source}."
+                        copyright_msg += f"Note: The generated text bears noticeable similarity to " \
+                                         f"{suspected_source.title} by {suspected_source.author}."
             if copyright_msg != "":
                 response += "\n\n*" + copyright_msg + "*"
 
