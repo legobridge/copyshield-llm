@@ -11,8 +11,8 @@ TEXT_DIR = DATA_DIR / "text"
 METADATA_PATH = DATA_DIR / "metadata.csv"
 CORPUS_PICKLE_PATH = DATA_DIR / "corpus_pickle.pkl"
 BM25_PICKLE_PATH = DATA_DIR / "bm25_pickle.pkl"
-CORPUS_SIZE = 500
-SCORE_DIFF_THRESHOLD = 0.02
+CORPUS_SIZE = 1000
+SCORE_DIFF_THRESHOLD = 0.015
 
 
 @dataclass
@@ -30,30 +30,32 @@ class BM25Scorer:
                 self.corpus = pickle.load(f)
             with open(BM25_PICKLE_PATH, 'rb') as f:
                 self.bm25 = pickle.load(f)
-        else:
-            metadata_df = pd.read_csv(METADATA_PATH)
-            self.corpus = []
-            for _, row in metadata_df.iterrows():
-                doc_id = row['id']
-                doc_path = TEXT_DIR / f"{doc_id}_text.txt"
-                if doc_path.exists():  # todo: parallelize
-                    with open(doc_path) as f:
-                        text = f.read()
-                    title = row['title']
-                    author = row['author']
-                    self.corpus.append(Document(title, author, text))
-                    if len(self.corpus) == CORPUS_SIZE:
-                        break
-            tokenized_corpus = [doc.text.split(" ") for doc in self.corpus]
-            self.bm25 = BM25Okapi(tokenized_corpus)
-            with open(CORPUS_PICKLE_PATH, 'wb') as f:
-                pickle.dump(self.corpus, f)
-            with open(BM25_PICKLE_PATH, 'wb') as f:
-                pickle.dump(self.bm25, f)
+            if len(self.corpus) == CORPUS_SIZE:
+                return
+        # If pickle doesn't exist, or is the wrong size, regenerate it
+        metadata_df = pd.read_csv(METADATA_PATH)
+        self.corpus = []
+        for _, row in metadata_df.iterrows():
+            doc_id = row['id']
+            doc_path = TEXT_DIR / f"{doc_id}_text.txt"
+            if doc_path.exists():  # todo: parallelize
+                with open(doc_path) as f:
+                    text = f.read()
+                title = row['title']
+                author = row['author']
+                self.corpus.append(Document(title, author, text))
+                if len(self.corpus) == CORPUS_SIZE:
+                    break
+        tokenized_corpus = [doc.text.split(" ") for doc in self.corpus]
+        self.bm25 = BM25Okapi(tokenized_corpus)
+        with open(CORPUS_PICKLE_PATH, 'wb') as f:
+            pickle.dump(self.corpus, f)
+        with open(BM25_PICKLE_PATH, 'wb') as f:
+            pickle.dump(self.bm25, f)
 
     def find_suspected_source_of_response(self, text_to_check: str) -> Optional[Document]:
         """
-        Function for performing a BM25 search of the LLM response over our corpus.
+        Function for performing a BM25 search of the LLM response over our corpus
         :param text_to_check: the text to check for infringement
         :return: the name of a source document if a significant match is found, None if not confident about the match.
         """
