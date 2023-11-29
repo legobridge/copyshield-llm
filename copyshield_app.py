@@ -5,7 +5,7 @@ import streamlit as st
 from openai import OpenAI
 
 from bm25 import BM25Scorer
-from constants import ASSISTANT_ROLE_NAME, USER_ROLE_NAME, INPUT_PROMPT_TEMPLATE
+from constants import ASSISTANT_ROLE_NAME, USER_ROLE_NAME, USER_PROMPT_INSPECTION_PROMPT_TEMPLATE
 
 
 # App title
@@ -49,7 +49,7 @@ st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
 
 def get_input_plagiarism_report():
     try:
-        input_prompt = INPUT_PROMPT_TEMPLATE.format(st.session_state.messages[-1]["content"])
+        input_prompt = USER_PROMPT_INSPECTION_PROMPT_TEMPLATE.format(st.session_state.messages[-1]["content"])
         output = st.session_state['open_ai_client'].chat.completions.create(
             model=model,
             response_format={"type": "json_object"},
@@ -94,27 +94,30 @@ if st.session_state.messages[-1]["role"] != ASSISTANT_ROLE_NAME:
 
             response = ""
             copyright_msg = ""
+            sus_source_message = ""
 
             if request_plagiarism_level == 2:
                 # If the request is blatantly asking for copyrighted material, don't bother generating a chat response
-                copyright_msg += "You have requested copyrighted material, please try again. " \
-                                 + request_plagiarism_explanation
+                copyright_msg = "You have requested copyrighted material, please try again. " \
+                                + request_plagiarism_explanation
             else:
                 # Else, generate a response and evaluate it
                 response = generate_gpt_chat_response()
                 if response is None:
-                    copyright_msg = "Sorry, the prompt was blocked by provider. Try asking differently."
+                    copyright_msg = "Sorry, the prompt was blocked by the LLM provider. Try asking differently."
                 else:
                     if request_plagiarism_level == 1:
-                        copyright_msg += "You may have requested copyrighted material. " \
-                                         + request_plagiarism_explanation
+                        copyright_msg = "You may have requested copyrighted material. " \
+                                        + request_plagiarism_explanation
 
                     suspected_source = st.session_state['bm25_scorer'].find_suspected_source_of_response(response)
                     if suspected_source is not None:
-                        copyright_msg += f"\nNote: The generated text bears noticeable similarity to " \
-                                         f"{suspected_source.title} by {suspected_source.author}."
+                        sus_source_message = f"Note: The generated text bears noticeable similarity to " \
+                                             f"{suspected_source.title} by {suspected_source.author}."
             if copyright_msg != "":
                 response += "\n\n*" + copyright_msg + "*"
+            if sus_source_message != "":
+                response += "\n\n*" + sus_source_message + "*"
 
             placeholder = st.empty()
             full_response = ''

@@ -11,15 +11,16 @@ TEXT_DIR = DATA_DIR / "text"
 METADATA_PATH = DATA_DIR / "metadata.csv"
 CORPUS_PICKLE_PATH = DATA_DIR / "corpus_pickle.pkl"
 BM25_PICKLE_PATH = DATA_DIR / "bm25_pickle.pkl"
-CORPUS_SIZE = 1000
-SCORE_DIFF_THRESHOLD = 0.015
+CORPUS_SIZE = 10000
+DOCUMENT_SIZE = 5000
+SCORE_DIFF_THRESHOLD = 0.15
 
 
 @dataclass
-class Document:
+class DocumentMetadata:
     title: str
     author: str
-    text: str
+    segment: int
 
 
 class BM25Scorer:
@@ -27,33 +28,42 @@ class BM25Scorer:
     def __init__(self):
         if CORPUS_PICKLE_PATH.exists():
             with open(CORPUS_PICKLE_PATH, 'rb') as f:
-                self.corpus = pickle.load(f)
+                self.corpus_metadata = pickle.load(f)
             with open(BM25_PICKLE_PATH, 'rb') as f:
                 self.bm25 = pickle.load(f)
-            if len(self.corpus) == CORPUS_SIZE:
+            if len(self.corpus_metadata) == CORPUS_SIZE:
                 return
         # If pickle doesn't exist, or is the wrong size, regenerate it
         metadata_df = pd.read_csv(METADATA_PATH)
-        self.corpus = []
+        self.corpus_metadata = []
+        tokenized_corpus = []
         for _, row in metadata_df.iterrows():
             doc_id = row['id']
             doc_path = TEXT_DIR / f"{doc_id}_text.txt"
-            if doc_path.exists():  # todo: parallelize
-                with open(doc_path) as f:
-                    text = f.read()
+            if doc_path.exists():
                 title = row['title']
                 author = row['author']
-                self.corpus.append(Document(title, author, text))
-                if len(self.corpus) == CORPUS_SIZE:
+                with open(doc_path) as f:
+                    text = f.read()
+                tokenized_text = text.split()
+                segment_id = 0
+                while segment_id * DOCUMENT_SIZE < len(tokenized_text):
+                    start = segment_id * DOCUMENT_SIZE
+                    end = min(len(tokenized_text), (segment_id + 1) * DOCUMENT_SIZE)
+                    tokenized_corpus.append(tokenized_text[start:end])
+                    self.corpus_metadata.append(DocumentMetadata(title, author, segment_id))
+                    segment_id += 1
+                    if len(self.corpus_metadata) == CORPUS_SIZE:
+                        break
+                if len(self.corpus_metadata) == CORPUS_SIZE:
                     break
-        tokenized_corpus = [doc.text.split(" ") for doc in self.corpus]
         self.bm25 = BM25Okapi(tokenized_corpus)
         with open(CORPUS_PICKLE_PATH, 'wb') as f:
-            pickle.dump(self.corpus, f)
+            pickle.dump(self.corpus_metadata, f)
         with open(BM25_PICKLE_PATH, 'wb') as f:
             pickle.dump(self.bm25, f)
 
-    def find_suspected_source_of_response(self, text_to_check: str) -> Optional[Document]:
+    def find_suspected_source_of_response(self, text_to_check: str) -> Optional[DocumentMetadata]:
         """
         Function for performing a BM25 search of the LLM response over our corpus
         :param text_to_check: the text to check for infringement
@@ -74,7 +84,7 @@ class BM25Scorer:
 
         # If the difference is large enough, return the details of the top document
         if score_diff_in_first_second_result > SCORE_DIFF_THRESHOLD:
-            return self.corpus[top_doc_idx]
+            return self.corpus_metadata[top_doc_idx]
 
         # Else return None
         return None
